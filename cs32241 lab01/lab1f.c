@@ -2,20 +2,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include "eye.h"
 
 #define MAX_N 200000
+// fenwick tree initialization
+int64 fenwick[MAX_N + 1];
 
-long long int fenwick[MAX_N + 1];
-
-void fenwick_update(int index, long long int value, int max_val) {
+void fenwick_update(int index, int64 value, int max_val) {
     while (index <= max_val) {
         fenwick[index] += value;
         index += (index & -index);
     }
 }
 
-long long int fenwick_query(int index) {
-    long long int sum = 0;
+int64 fenwick_query(int index) {
+    int64 sum = 0;
     while (index > 0) {
         sum += fenwick[index];
         index -= (index & -index);
@@ -24,25 +25,25 @@ long long int fenwick_query(int index) {
 }
 
 int compare(const void *a, const void *b) {
-    long long int diff = (*(long long int *)a - *(long long int *)b);
+    int64 diff = (*(int64 *)a - *(int64 *)b);
     return (diff > 0) - (diff < 0);
 }
 
-long long int eye_count(long long int *s, int n) {
-    long long int *coordinates = malloc(n * sizeof(long long int));
-    long long int *k = malloc(n * sizeof(long long int));
-    long long int *found = calloc(n + 1, sizeof(long long int));
-    long long int *value_last = calloc(n + 1, sizeof(long long int));
-    long long int *first_occur_value = calloc(n + 1, sizeof(long long int));
-    long long int *dp = calloc(n + 1, sizeof(long long int));
+int64 eye_count(int64 *s, int n) {
+    int64 *s_copy = malloc(n * sizeof(int64)); //ranks kumbaga nung elements
+    int64 *ranked_index = malloc(n * sizeof(int64)); //
+    int64 *occurences = calloc(n + 1, sizeof(int64));
+    int64 *last_ftc_count = calloc(n + 1, sizeof(int64));
+    int64 *value_of_first_occurrence = calloc(n + 1, sizeof(int64));
+    int64 *previous_count = calloc(n + 1, sizeof(int64));
 
-    memcpy(coordinates, s, n * sizeof(long long int));
-    qsort(coordinates, n, sizeof(long long int), compare);
+    memcpy(s_copy, s, n * sizeof(int64));
+    qsort(s_copy, n, sizeof(int64), compare);
 
     int unique_count = 1;
     for (int i = 1; i < n; i++) {
-        if (coordinates[i] != coordinates[i - 1]) {
-            coordinates[unique_count++] = coordinates[i];
+        if (s_copy[i] != s_copy[i - 1]) {
+            s_copy[unique_count++] = s_copy[i];
         }
     }
 
@@ -50,10 +51,10 @@ long long int eye_count(long long int *s, int n) {
         int left = 0, right = unique_count - 1;
         while (left <= right) {
             int mid = left + (right - left) / 2;
-            if (coordinates[mid] == s[i]) {
-                k[i] = mid + 1; 
+            if (s_copy[mid] == s[i]) {
+                ranked_index[i] = mid + 1; 
                 break;
-            } else if (coordinates[mid] < s[i]) {
+            } else if (s_copy[mid] < s[i]) {
                 left = mid + 1;
             } else {
                 right = mid - 1;
@@ -61,37 +62,39 @@ long long int eye_count(long long int *s, int n) {
         }
     }
 
-    long long int result = 0;
-    long long int max_so_far = 0;
+    free(s_copy);
 
-    memset(fenwick, 0, (unique_count + 1) * sizeof(long long int));
+    int64 result = 0;
+    int64 max_so_far = 0;
+
+    memset(fenwick, 0, (unique_count + 1) * sizeof(int64));
 
     for (int i = 0; i < n; i++) {
-        if (k[i] > max_so_far) max_so_far = k[i];
+        int64 current_element = ranked_index[i];
+        if (current_element > max_so_far) max_so_far = current_element;
 
-        if (found[k[i]] > 0) {
-            long long int a = fenwick_query(max_so_far) - fenwick_query(k[i]);
-            a -= first_occur_value[k[i]];
-            long long int abc = (dp[k[i]]) + ((a - value_last[k[i]]) * found[k[i]]);
+        if (occurences[current_element] > 0) {
+            int64 first_to_current_count = fenwick_query(max_so_far) - fenwick_query(current_element) - value_of_first_occurrence[current_element];
 
-            result += abc;
+            int64 overall_value = (previous_count[current_element]) + ((first_to_current_count - last_ftc_count[current_element]) * occurences[current_element]);
 
-            value_last[k[i]] = a;
-            dp[k[i]] = abc;
+            result += overall_value;
+
+            last_ftc_count[current_element] = first_to_current_count;
+            previous_count[current_element] = overall_value;
         } else {
-            first_occur_value[k[i]] = fenwick_query(max_so_far) - fenwick_query(k[i]);
+            value_of_first_occurrence[current_element] = fenwick_query(max_so_far) - fenwick_query(current_element);
         }
 
-        fenwick_update(k[i], 1, unique_count);
-        found[k[i]] += 1;
+        fenwick_update(current_element, 1, unique_count);
+        occurences[current_element] += 1;
     }
 
-    free(coordinates);
-    free(k);
-    free(found);
-    free(value_last);
-    free(first_occur_value);
-    free(dp);
+    free(ranked_index);
+    free(occurences);
+    free(last_ftc_count);
+    free(value_of_first_occurrence);
+    free(previous_count);
 
     return result;
 }
